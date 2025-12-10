@@ -159,3 +159,123 @@ def calculate_buy_only_rebalancing(df_result, total_value):
                 total_additional_invest += buy_needed
                 
     return buy_only_data, total_additional_invest
+
+def check_rebalancing_proximity(df_result, total_value, threshold=5.0):
+    """
+    리밸런싱 근접도 체크
+    
+    Args:
+        df_result: 포트폴리오 데이터프레임
+        total_value: 총 자산 가치
+        threshold: 허용 편차 (%, 기본값 5%)
+    
+    Returns:
+        tuple: (is_near_balanced, max_deviation, deviations_dict)
+    """
+    if total_value == 0:
+        return False, 0, {}
+    
+    deviations = {}
+    max_deviation = 0
+    
+    for _, row in df_result.iterrows():
+        if row['TargetRatio'] == 0:
+            continue
+            
+        ticker = row['Ticker']
+        current_ratio = (row['Market Value (KRW)'] / total_value) * 100
+        target_ratio = row['TargetRatio']
+        deviation = abs(current_ratio - target_ratio)
+        
+        deviations[ticker] = {
+            'current': current_ratio,
+            'target': target_ratio,
+            'deviation': deviation
+        }
+        
+        if deviation > max_deviation:
+            max_deviation = deviation
+    
+    is_near_balanced = max_deviation <= threshold
+    
+    return is_near_balanced, max_deviation, deviations
+
+def calculate_dividend_maximized_top3(df_result, additional_budget):
+    """
+    배당 극대화 전략으로 상위 3종목에 투자금 배분
+    
+    Args:
+        df_result: 포트폴리오 데이터프레임
+        additional_budget: 추가 투자 가능 금액
+    
+    Returns:
+        tuple: (top3_investment_data, total_expected_annual_dividend, total_expected_monthly_dividend)
+    """
+    if additional_budget <= 0 or df_result.empty:
+        return [], 0, 0
+    
+    # 배당률이 있는 종목만 필터링
+    dividend_stocks = df_result[df_result['Dividend Yield (%)'] > 0].copy()
+    
+    if dividend_stocks.empty:
+        return [], 0, 0
+    
+    # 배당률 기준 내림차순 정렬
+    dividend_stocks = dividend_stocks.sort_values('Dividend Yield (%)', ascending=False)
+    
+    # 상위 3종목 선택 (또는 전체 종목이 3개 미만인 경우)
+    top_stocks = dividend_stocks.head(min(3, len(dividend_stocks)))
+    
+    # 배당률 합계
+    total_yield = top_stocks['Dividend Yield (%)'].sum()
+    
+    if total_yield == 0:
+        return [], 0, 0
+    
+    investment_data = []
+    total_expected_annual_div = 0
+    
+    for _, row in top_stocks.iterrows():
+        ticker = row['Ticker']
+        dividend_yield = row['Dividend Yield (%)']
+        current_price = row['Current Price']
+        currency = row['Currency']
+        
+        # 환율 계산
+        if row['Quantity'] > 0 and row['Current Price'] > 0:
+            implied_rate = row['Market Value (KRW)'] / (row['Quantity'] * row['Current Price'])
+        else:
+            implied_rate = 1400 if currency == 'USD' else 1
+        
+        # 가중치 계산 (배당률 비율)
+        weight = dividend_yield / total_yield
+        
+        # 투자 금액 배분
+        investment_amount = additional_budget * weight
+        
+        # 매수 가능 수량
+        price_krw = current_price * implied_rate
+        if price_krw > 0:
+            buy_quantity = investment_amount / price_krw
+        else:
+            buy_quantity = 0
+        
+        # 예상 연 배당금
+        expected_annual_dividend = investment_amount * (dividend_yield / 100)
+        total_expected_annual_div += expected_annual_dividend
+        
+        investment_data.append({
+            '종목': ticker,
+            '배당률': dividend_yield,
+            '가중치': weight * 100,
+            '투자 금액': investment_amount,
+            '매수 수량': buy_quantity,
+            '현재가': current_price,
+            '통화': currency,
+            '예상 연 배당금': expected_annual_dividend,
+            '예상 월 배당금': expected_annual_dividend / 12
+        })
+    
+    total_expected_monthly_div = total_expected_annual_div / 12
+    
+    return investment_data, total_expected_annual_div, total_expected_monthly_div

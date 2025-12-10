@@ -271,6 +271,79 @@ if not st.session_state.portfolio.empty:
                             }), use_container_width=True)
                     else:
                         st.success("추가 매수가 필요 없습니다.")
+                    
+                    # 배당 극대화 3종목 투자 제안
+                    st.markdown("---")
+                    st.subheader("🎯 배당 극대화 3종목 투자")
+                    
+                    # 리밸런싱 근접도 체크
+                    is_near_balanced, max_deviation, deviations = utils.check_rebalancing_proximity(df_result, total_value, threshold=5.0)
+                    
+                    if is_near_balanced:
+                        st.success(f"🎯 포트폴리오가 목표 비중에 근접했습니다! (최대 편차: {max_deviation:.1f}%)")
+                    else:
+                        st.info(f"현재 최대 편차: {max_deviation:.1f}% (목표: 5% 이내)")
+                    
+                    st.markdown("**배당률 상위 3종목에 추가 투자금을 최적 배분합니다.**")
+                    
+                    # 투자 금액 입력
+                    col_invest1, col_invest2 = st.columns([2, 1])
+                    with col_invest1:
+                        additional_investment = st.number_input(
+                            "추가 투자 가능 금액 (₩)",
+                            min_value=0,
+                            value=1000000,
+                            step=100000,
+                            key="additional_investment_input"
+                        )
+                    
+                    if additional_investment > 0:
+                        # 배당 극대화 3종목 계산
+                        top3_data, expected_annual, expected_monthly = utils.calculate_dividend_maximized_top3(df_result, additional_investment)
+                        
+                        if top3_data:
+                            # 예상 배당금 표시
+                            col_div1, col_div2 = st.columns(2)
+                            with col_div1:
+                                st.metric("📈 예상 추가 연 배당금", f"₩{expected_annual:,.0f}")
+                            with col_div2:
+                                st.metric("📊 예상 추가 월 배당금", f"₩{expected_monthly:,.0f}")
+                            
+                            # 종목별 투자 제안 테이블
+                            st.markdown("#### 💎 종목별 투자 제안")
+                            df_top3 = pd.DataFrame(top3_data)
+                            
+                            # 표시용 데이터프레임
+                            display_top3 = df_top3[['종목', '배당률', '가중치', '투자 금액', '매수 수량', '예상 연 배당금']].copy()
+                            
+                            st.dataframe(display_top3.style.format({
+                                '배당률': '{:.2f}%',
+                                '가중치': '{:.1f}%',
+                                '투자 금액': '₩{:,.0f}',
+                                '매수 수량': '{:.3f}',
+                                '예상 연 배당금': '₩{:,.0f}'
+                            }).background_gradient(subset=['배당률'], cmap='Greens'),
+                            use_container_width=True)
+                            
+                            # 상세 정보 (확장 가능)
+                            with st.expander("📋 상세 투자 정보"):
+                                for item in top3_data:
+                                    st.markdown(f"**{item['종목']}**")
+                                    st.markdown(f"- 배당률: {item['배당률']:.2f}%")
+                                    st.markdown(f"- 현재가: {item['통화']} {item['현재가']:,.2f}")
+                                    st.markdown(f"- 투자 금액: ₩{item['투자 금액']:,.0f} ({item['가중치']:.1f}%)")
+                                    st.markdown(f"- 매수 수량: {item['매수 수량']:.3f}주")
+                                    st.markdown(f"- 예상 월 배당금: ₩{item['예상 월 배당금']:,.0f}")
+                                    st.markdown("---")
+                            
+                            # 투자 효율성 분석
+                            if expected_annual > 0:
+                                effective_yield = (expected_annual / additional_investment) * 100
+                                st.info(f"💡 **투자 효율**: 예상 배당 수익률 {effective_yield:.2f}%")
+                        else:
+                            st.warning("배당률이 있는 종목이 없습니다.")
+                    else:
+                        st.info("투자 가능 금액을 입력하세요.")
                         
             # 종목별 상세 정보
             st.markdown("---")
