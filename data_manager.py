@@ -3,10 +3,12 @@ import pandas as pd
 import streamlit as st
 from datetime import datetime
 
+@st.cache_data(ttl=300)  # 5분간 캐시
 def get_exchange_rate(currency_pair="KRW=X"):
     """
     실시간 환율 정보를 가져옵니다.
     실패 시 기본값 1400원을 반환하지만 경고를 로그에 남깁니다.
+    캐시 적용: 5분마다 갱신
     """
     try:
         ticker = yf.Ticker(currency_pair)
@@ -25,9 +27,11 @@ def get_exchange_rate(currency_pair="KRW=X"):
         print(f"Error fetching exchange rate: {e}")
         return 1400.0
 
+@st.cache_data(ttl=300)  # 5분간 캐시
 def fetch_stock_data_batch(portfolio_df):
     """
     포트폴리오 내 모든 종목의 데이터를 일괄(Batch)로 가져옵니다.
+    캐시 적용: 5분마다 갱신
     """
     if portfolio_df.empty:
         return pd.DataFrame(), 0, 0, []
@@ -196,8 +200,11 @@ def fetch_stock_data_batch(portfolio_df):
     
     return pd.DataFrame(results), total_value, total_annual_dividend, monthly_dividend_list
 
+@st.cache_data(ttl=300)  # 5분간 캐시
 def get_exchange_rate_analysis():
-    """원/달러 환율 기술적 분석 데이터"""
+    """원/달러 환율 기술적 분석 데이터
+    캐시 적용: 5분마다 갱신
+    """
     try:
         ticker = "KRW=X"
         stock = yf.Ticker(ticker)
