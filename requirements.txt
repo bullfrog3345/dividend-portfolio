@@ -3,4 +3,5 @@ pandas
 yfinance
 plotly
 deep-translator
+matplotlib
 
